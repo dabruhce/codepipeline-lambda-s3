@@ -5,11 +5,6 @@ import traceback
 
 print('Loading codepipeline-lambda-s3 function.')
 
-
-def get_codepipeline_client():
-    return boto3.client('codepipeline')
-
-
 def get_input_artifact(artifacts):
     """Returns the input artifact from the 'artifacts' list.
 
@@ -32,36 +27,6 @@ def get_input_artifact(artifacts):
     bucket = location['s3Location']['bucketName']
     key = location['s3Location']['objectKey']
     return {'Bucket': bucket, 'Key': key}
-
-
-def put_job_success(job, message):
-    """Notify CodePipeline of a successful job
-
-    Args:
-        job: The CodePipeline job ID
-        message: A message to be logged relating to the job status
-    Raises:
-        Exception: Any exception thrown by .put_job_success_result()
-    """
-    print('Putting job success')
-    print(message)
-    get_codepipeline_client.put_job_success_result(jobId=job)
-
-
-def put_job_failure(job, message):
-    """Notify CodePipeline of a failed job
-
-    Args:
-        job: The CodePipeline job ID
-        message: A message to be logged relating to the job status
-    Raises:
-        Exception: Any exception thrown by .put_job_failure_result()
-    """
-    print('Putting job failure')
-    print(message)
-    get_codepipeline_client.put_job_failure_result(
-        jobId=job, failureDetails={'message': message, 'type': 'JobFailed'})
-
 
 def parse_job_data(job_data):
     """Decodes the JSON user parameters and validates the required properties.
@@ -140,7 +105,8 @@ def lambda_handler(event, context):
         response = lambda_client.update_function_code(
                     FunctionName=function,
                     S3Key=artifact['Key'], S3Bucket=artifact['Bucket'])
-        put_job_success(job_id, message)
+        client = boto3.client('codepipeline')
+        client.put_job_success_result(jobId=job_id)
 
     except Exception as e:
         # If any other exceptions which we didn't expect are raised
@@ -148,7 +114,10 @@ def lambda_handler(event, context):
         print('Function failed due to exception.')
         print(e)
         traceback.print_exc()
-        put_job_failure(job_id, 'Function exception: ' + str(e))
+        client = boto3.client('codepipeline')
+        client.put_job_failure_result(jobId=job_id, failureDetails={'message': str(e), 'type': 'JobFailed'})
+
+
 
     print('Function complete.')
     return "Complete."
